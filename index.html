@@ -1,43 +1,83 @@
-const procesarFrame = () => {
-    if (!estaGrabando) return;
-    
-    // 1. Limpiar el fondo en negro
-    ctxFantasma.fillStyle = "black";
-    ctxFantasma.fillRect(0, 0, 1280, 720);
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>legacyfutbolkids</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: black; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        /* Interfaz de usuario limpia inferior */
+        #ui { 
+            position: absolute; z-index: 9999; bottom: 40px; left: 50%; 
+            transform: translateX(-50%); width: auto;
+            display: flex; gap: 25px; justify-content: center; align-items: center;
+            padding: 12px 25px; background: rgba(0, 0, 0, 0.6); border-radius: 50px;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
 
-    // 2. Dibujar la cámara nativa respetando su proporción (Letterbox/Cover)
-    if (videoCamaraPersona.videoWidth > 0) {
-        const vWidth = videoCamaraPersona.videoWidth;
-        const vHeight = videoCamaraPersona.videoHeight;
+        .btn-circular {
+            width: 60px; height: 60px; border-radius: 50%; border: 2px solid white;
+            background: rgba(0, 0, 0, 0.4); color: white;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s ease; position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            padding: 0; outline: none;
+        }
+        .btn-circular:active { transform: scale(0.9); }
         
-        // Calcular escala para cubrir el lienzo horizontal (1280x720) sin deformar
-        const escala = Math.max(1280 / vWidth, 720 / vHeight);
-        const nw = vWidth * escala;
-        const nh = vHeight * escala;
-        const cx = (1280 - nw) / 2;
-        const cy = (720 - nh) / 2;
-        
-        ctxFantasma.drawImage(videoCamaraPersona, cx, cy, nw, nh);
-    } else {
-        // Callback de respaldo si el video no ha cargado metadatos de tamaño
-        ctxFantasma.drawImage(videoCamaraPersona, 0, 0, 1280, 720);
-    }
+        /* Estilos para los iconos SVG internos */
+        .btn-circular svg {
+            width: 26px; height: 26px; fill: currentColor; transition: fill 0.2s ease;
+        }
 
-    // 3. Dibujar la escena AR (Canvas) respetando su proporción
-    if (canvasAR.width > 0) {
-        const cWidth = canvasAR.width;
-        const cHeight = canvasAR.height;
+        .btn-circular.grabando { background: rgba(244, 67, 54, 0.9); border-color: #f44336; }
+        .btn-circular.grabando::after {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; background: inherit; animation: pulso 1.5s infinite;
+            top: -2px; left: -2px; border: 2px solid #f44336;
+        }
+        @keyframes pulso {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+
+        #miVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .a-enter-vr, .a-enter-ar { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <button id="recordButton" class="btn-circular" title="Grabar">
+            <svg id="iconRecord" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" fill="#f44336"/>
+            </svg>
+        </button>
+        <button id="torchButton" class="btn-circular" title="Linterna">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 2F10 10 0 0 0 5 15.63V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3.37A10 10 0 0 0 12 2zm1 17h-2v-2h2zm2.14-4.27l-.64.44V18H9.5v-2.83l-.64-.44A8 8 0 1 1 15.14 14.73z" fill="white"/>
+            </svg>
+        </button>
+    </div>
+
+    <video id="miVideo" src="./video.mp4" preload="auto" crossorigin="anonymous" webkit-playsinline playsinline loop></video>
+
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: no; uiLoading: no; filterMinCF: 0.0005; filterBeta: 0.005;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights, preserveDrawingBuffer: true, alpha: true" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
         
-        const escalaAR = Math.max(1280 / cWidth, 720 / cHeight);
-        const naw = cWidth * escalaAR;
-        const nah = cHeight * escalaAR;
-        const cax = (1280 - naw) / 2;
-        const cay = (720 - nah) / 2;
-        
-        ctxFantasma.drawImage(canvasAR, cax, cay, naw, nah);
-    } else {
-        ctxFantasma.drawImage(canvasAR, 0, 0, 1280, 720);
-    }
-    
-    loopMezclador = requestAnimationFrame(procesarFrame);
-};
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity id="franelaTarget" mindar-image-target="targetIndex: 0">
+            <a-video id="arVideoEntity" src="#miVideo" width="1" height="1.777" position="0 0 0" rotation="0 0 0" scale="1.15 1.15 1" opacity="1"></a-video>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        const video = document.querySelector('#miVideo');
+        const recordButton = document.querySelector('#recordButton');
