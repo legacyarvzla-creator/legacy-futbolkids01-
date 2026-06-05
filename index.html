@@ -81,3 +81,194 @@
     <script>
         const video = document.querySelector('#miVideo');
         const recordButton = document.querySelector('#recordButton');
+        const iconRecord = document.querySelector('#iconRecord');
+        const torchButton = document.querySelector('#torchButton');
+        const franelaTarget = document.querySelector('#franelaTarget');
+
+        // Desbloqueo pasivo de audio
+        const activarContextoAudio = () => {
+            video.play().then(() => {
+                if (!targetDetectado) {
+                    video.pause();
+                }
+            }).catch(err => console.log("Esperando interacción nativa..."));
+            
+            document.removeEventListener('click', activarContextoAudio);
+            document.removeEventListener('touchstart', activarContextoAudio);
+        };
+        document.addEventListener('click', activarContextoAudio);
+        document.addEventListener('touchstart', activarContextoAudio);
+
+        let targetDetectado = false;
+
+        // Lógica de reproducción automática
+        franelaTarget.addEventListener("targetFound", () => {
+            targetDetectado = true;
+            video.play().catch(err => {
+                console.log("Audio retenido hasta que el usuario toque la pantalla");
+            });
+        });
+
+        franelaTarget.addEventListener("targetLost", () => {
+            targetDetectado = false;
+            video.pause();
+        });
+
+        // ============================================================
+        // MEZCLADOR INTEGRAL HORIZONTAL AJUSTADO (1280x720 Fijo sin estirar)
+        // ============================================================
+        let mediaRecorder;
+        let videoBlobs = [];
+        let estaGrabando = false;
+        let loopMezclador;
+        let canvasFantasma, ctxFantasma;
+
+        recordButton.addEventListener('click', async () => {
+            if (!estaGrabando) {
+                try {
+                    const canvasAR = document.querySelector('canvas');
+                    const videoCamaraPersona = document.querySelector('video:not(#miVideo)');
+
+                    if (!videoCamaraPersona) {
+                        alert("Espera a que cargue la cámara por completo.");
+                        return;
+                    }
+
+                    // Forzar el lienzo final a dimensiones HD horizontales exactas
+                    canvasFantasma = document.createElement('canvas');
+                    canvasFantasma.width = 1280;
+                    canvasFantasma.height = 720;
+                    ctxFantasma = canvasFantasma.getContext('2d');
+
+                    // Función matemática interna para calcular el redimensionado "cover" sin deformar la imagen
+                    const procesarFrame = () => {
+                        if (!estaGrabando) return;
+                        
+                        // Limpiar fotograma anterior
+                        ctxFantasma.fillStyle = "black";
+                        ctxFantasma.fillRect(0, 0, 1280, 720);
+
+                        // 1. Dibujar el feed de la cámara real calculando proporciones corretas
+                        if (videoCamaraPersona.videoWidth > 0) {
+                            const vWidth = videoCamaraPersona.videoWidth;
+                            const vHeight = videoCamaraPersona.videoHeight;
+                            
+                            const escala = Math.max(1280 / vWidth, 720 / vHeight);
+                            const nw = vWidth * escala;
+                            const nh = vHeight * escala;
+                            const cx = (1280 - nw) / 2;
+                            const cy = (720 - nh) / 2;
+                            
+                            ctxFantasma.drawImage(videoCamaraPersona, cx, cy, nw, nh);
+                        } else {
+                            ctxFantasma.drawImage(videoCamaraPersona, 0, 0, 1280, 720);
+                        }
+
+                        // 2. Superponer la escena de Realidad Aumentada manteniendo la misma escala unificada
+                        if (canvasAR.width > 0) {
+                            const cWidth = canvasAR.width;
+                            const cHeight = canvasAR.height;
+                            
+                            const escalaAR = Math.max(1280 / cWidth, 720 / cHeight);
+                            const naw = cWidth * escalaAR;
+                            const nah = cHeight * escalaAR;
+                            const cax = (1280 - naw) / 2;
+                            const cay = (720 - nah) / 2;
+                            
+                            ctxFantasma.drawImage(canvasAR, cax, cay, naw, nah);
+                        } else {
+                            ctxFantasma.drawImage(canvasAR, 0, 0, 1280, 720);
+                        }
+                        
+                        loopMezclador = requestAnimationFrame(procesarFrame);
+                    };
+
+                    estaGrabando = true;
+                    procesarFrame();
+
+                    const streamVisual = canvasFantasma.captureStream(30);
+                    const pistaVideoCombinada = streamVisual.getVideoTracks()[0];
+
+                    const streamAudioNativo = video.captureStream ? video.captureStream() : video.mozCaptureStream ? video.mozCaptureStream() : null;
+                    const pistaAudio = streamAudioNativo ? streamAudioNativo.getAudioTracks()[0] : null;
+
+                    const componentesFlujo = [pistaVideoCombinada];
+                    if (pistaAudio) componentesFlujo.push(pistaAudio);
+
+                    const streamFinal = new MediaStream(componentesFlujo);
+
+                    // Configuración de formatos y bitrate estable para alta resolución
+                    let codecIdeal = 'video/webm;codecs=vp8,opus';
+                    let opcionesRecorder = { mimeType: codecIdeal, videoBitsPerSecond: 4000000 }; 
+                    
+                    if (!MediaRecorder.isTypeSupported(codecIdeal)) {
+                        opcionesRecorder = { mimeType: 'video/mp4', videoBitsPerSecond: 4000000 }; 
+                    }
+
+                    mediaRecorder = new MediaRecorder(streamFinal, opcionesRecorder);
+                    videoBlobs = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) videoBlobs.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        cancelAnimationFrame(loopMezclador);
+                        const blobFinal = new Blob(videoBlobs, { type: videoBlobs[0].type });
+                        const urlDescarga = URL.createObjectURL(blobFinal);
+                        const enlace = document.createElement('a');
+                        enlace.href = urlDescarga;
+                        
+                        const extension = videoBlobs[0].type.includes('mp4') ? '.mp4' : '.webm';
+                        enlace.download = 'experiencia_AR_horizontal' + extension;
+                        enlace.click();
+                        
+                        canvasFantasma = null;
+                        ctxFantasma = null;
+                    };
+
+                    mediaRecorder.start();
+                    
+                    // Cambio dinámico a icono de STOP (Cuadrado blanco)
+                    iconRecord.innerHTML = '<rect x="4" y="4" width="16" height="16" fill="white"/>';
+                    recordButton.classList.add('grabando');
+
+                } catch (error) {
+                    console.error(error);
+                    alert("Tu modelo de celular bloquea la grabación unificada por privacidad.");
+                    estaGrabando = false;
+                }
+            } else {
+                estaGrabando = false;
+                mediaRecorder.stop();
+                
+                // Retorna al icono de GRABAR (Círculo rojo)
+                iconRecord.innerHTML = '<circle cx="12" cy="12" r="10" fill="#f44336"/>';
+                recordButton.classList.remove('grabando');
+            }
+        });
+
+        // Control de la linterna (Flash)
+        let luzEncendida = false;
+        torchButton.addEventListener('click', async () => {
+            try {
+                const sceneEl = document.querySelector('a-scene');
+                const camaraTrack = sceneEl.systems["mindar-image-system"].video.srcObject.getVideoTracks()[0];
+                
+                if (camaraTrack) {
+                    const soporte = camaraTrack.getCapabilities();
+                    if (soporte.torch) {
+                        luzEncendida = !luzEncendida;
+                        await camaraTrack.applyConstraints({ advanced: [{ torch: luzEncendida }] });
+                        torchButton.style.background = luzEncendida ? "rgba(255, 235, 59, 0.5)" : "rgba(0, 0, 0, 0.4)";
+                    } else {
+                        alert("La linterna no está disponible en este lente.");
+                    }
+                }
+            } catch (err) {
+                alert("La linterna requiere despliegue bajo protocolo seguro HTTPS.");
+            }
+        });
+    </script>
+</body>
+</html>
