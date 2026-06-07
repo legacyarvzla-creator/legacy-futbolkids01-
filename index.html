@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>legacyfutbolkids - MultiTarget 9:16 Corregido</title>
+    <title>legacyfutbolkids - MultiTarget 9:16 Final</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
@@ -19,16 +19,16 @@
         <button id="torchButton" class="btn-circular">FLASH</button>
     </div>
 
-  <video id="miVideo" 
-       src="./video.mp4" 
-       preload="auto" 
-       crossorigin="anonymous" 
-       webkit-playsinline="true" 
-       playsinline="true" 
-       muted="true" 
-       autoplay="false"
-       loop="true">
-</video>
+    <video id="miVideo" 
+           src="./video.mp4" 
+           preload="auto" 
+           crossorigin="anonymous" 
+           webkit-playsinline="true" 
+           playsinline="true" 
+           muted="false" 
+           autoplay="false"
+           loop="true">
+    </video>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; alpha: true;">
@@ -51,13 +51,27 @@
         
         let detectados = 0;
 
+        // Función para forzar audio tras el primer click
+        const activarAudio = () => {
+            video.muted = false;
+            video.play();
+            // Una vez activado, eliminamos los listeners
+            window.removeEventListener('click', activarAudio);
+            window.removeEventListener('touchstart', activarAudio);
+        };
+
+        window.addEventListener('click', activarAudio);
+        window.addEventListener('touchstart', activarAudio);
+
         targets.forEach((target) => {
             target.addEventListener("targetFound", () => {
                 detectados++;
-                // Movemos el contenedor al target encontrado usando el objeto 3D del target
                 target.object3D.add(videoContainer.object3D);
                 videoContainer.setAttribute('visible', 'true');
-                video.play();
+                
+                // Forzamos el play cada vez que se encuentre el target
+                video.muted = false; 
+                video.play().catch(e => console.log("Esperando interacción..."));
             });
 
             target.addEventListener("targetLost", () => {
@@ -68,9 +82,6 @@
                 }
             });
         });
-
-        // Asegurar audio al tocar cualquier parte
-        window.addEventListener('click', () => { video.play(); }, {once: true});
     </script>
 </body>
 </html>
