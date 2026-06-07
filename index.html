@@ -1,38 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEST DE CONTROL</title>
-    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Legacy AR Completo</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        #ui { position: absolute; z-index: 9999; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
+        .btn { width: 60px; height: 60px; border-radius: 50%; border: 2px solid white; background: rgba(0,0,0,0.6); color: white; cursor: pointer; }
+    </style>
 </head>
 <body>
-    <div style="position:fixed; top:20px; z-index:9999;">
-        <button onclick="testFlash()">PROBAR FLASH</button>
+
+    <div id="ui">
+        <button id="recordButton" class="btn">REC</button>
+        <button id="torchButton" class="btn">FLASH</button>
     </div>
 
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" renderer="preserveDrawingBuffer: true" vr-mode-ui="enabled: false">
+    <video id="miVideo" src="./video.mp4" loop playsinline webkit-playsinline crossorigin="anonymous" style="display:none"></video>
+
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: no; singleDetection: true;" renderer="preserveDrawingBuffer: true">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-        <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+
+        <a-entity id="target0" mindar-image-target="targetIndex: 0"></a-entity>
+        <a-entity id="target1" mindar-image-target="targetIndex: 1"></a-entity>
+        <a-entity id="target2" mindar-image-target="targetIndex: 2"></a-entity>
+
+        <a-video id="arVideo" src="#miVideo" width="1" height="1.777" visible="false"></a-video>
     </a-scene>
 
     <script>
-        // Esta función aísla el problema del Flash
-        async function testFlash() {
-            try {
-                // Buscamos el stream de la cámara de MindAR
-                const scene = document.querySelector('a-scene');
-                const videoEl = scene.querySelector('video'); // El video nativo que crea MindAR
-                const stream = videoEl.srcObject;
-                const track = stream.getVideoTracks()[0];
-                
-                // Intentamos encender el flash
-                await track.applyConstraints({ advanced: [{ torch: true }] });
-                alert("Flash encendido con éxito");
-            } catch (e) {
-                alert("Error: " + e.message + ". ¿Estás en HTTPS?");
+        const video = document.querySelector('#miVideo');
+        const arVideo = document.querySelector('#arVideo');
+        const recordButton = document.querySelector('#recordButton');
+        const torchButton = document.querySelector('#torchButton');
+
+        // 1. Audio desbloqueado por interacción
+        window.addEventListener('click', () => { 
+            video.muted = false; 
+            video.play(); 
+        }, {once: true});
+
+        // 2. Lógica de targets
+        document.querySelectorAll('a-entity[mindar-image-target]').forEach(t => {
+            t.addEventListener('targetFound', () => {
+                arVideo.setAttribute('visible', 'true');
+                t.appendChild(arVideo);
+                video.play();
+            });
+            t.addEventListener('targetLost', () => {
+                arVideo.setAttribute('visible', 'false');
+                video.pause();
+            });
+        });
+
+        // 3. Flash Robusto
+        torchButton.addEventListener('click', () => {
+            const scene = document.querySelector('a-scene');
+            const track = scene.systems['mindar-image-system'].video.srcObject.getVideoTracks()[0];
+            const torch = !track.getSettings().torch;
+            track.applyConstraints({ advanced: [{ torch }] });
+        });
+
+        // 4. Grabación Robusta
+        let recorder, chunks = [];
+        recordButton.addEventListener('click', () => {
+            if (recorder && recorder.state === 'recording') {
+                recorder.stop();
+                recordButton.textContent = "REC";
+            } else {
+                const canvas = document.querySelector('canvas');
+                recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' });
+                chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(new Blob(chunks, {type: 'video/webm'}));
+                    a.download = 'grabacion.webm';
+                    a.click();
+                };
+                recorder.start();
+                recordButton.textContent = "STOP";
             }
-        }
+        });
     </script>
 </body>
 </html>
