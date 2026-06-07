@@ -1,71 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>Legacy AR - WebAR Corregido</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST DE CONTROL</title>
     <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
-    <style>
-        #recording-btn { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 70px; height: 70px; border-radius: 50%; background-color: #ff0000; border: 4px solid white; cursor: pointer; }
-        #recording-btn.recording { background-color: #222; animation: pulse 1s infinite; border-color: #ff0000; }
-        #flash-btn { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 50px; height: 50px; border-radius: 50%; background-color: rgba(0, 0, 0, 0.6); border: 2px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        #flash-btn.active { background-color: #ffd700; }
-        @keyframes pulse { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(0.9); } }
-    </style>
 </head>
 <body>
-    <div id="flash-btn"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="white" d="M7,2V13H10V22L17,10H13L17,2H7Z"/></svg></div>
-    <button id="recording-btn"></button>
+    <div style="position:fixed; top:20px; z-index:9999;">
+        <button onclick="testFlash()">PROBAR FLASH</button>
+    </div>
 
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" renderer="preserveDrawingBuffer: true; antialias: true;" vr-mode-ui="enabled: false">
-        <a-assets>
-            <video id="vid" src="Video_WebAR.mp4" loop="true" playsinline crossorigin="anonymous"></video>
-            <video id="vid2" src="Video_WebAR_2.mp4" loop="true" playsinline crossorigin="anonymous"></video>
-        </a-assets>
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" renderer="preserveDrawingBuffer: true" vr-mode-ui="enabled: false">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-        <a-entity id="target0" mindar-image-target="targetIndex: 0"><a-video src="#vid" width="1.778" height="1"></a-video></a-entity>
-        <a-entity id="target1" mindar-image-target="targetIndex: 1"><a-video src="#vid2" width="1.778" height="1"></a-video></a-entity>
+        <a-entity mindar-image-target="targetIndex: 0"></a-entity>
     </a-scene>
 
     <script>
-        const video1 = document.querySelector('#vid');
-        const video2 = document.querySelector('#vid2');
-        const btn = document.getElementById('recording-btn');
-        const flashBtn = document.getElementById('flash-btn');
-        let isFlashOn = false;
-
-        // --- SOLUCIÓN AUDIO ---
-        // Debes hacer un click inicial para desbloquear el audio del navegador
-        window.addEventListener('click', () => {
-            video1.muted = false; video1.play();
-            video2.muted = false; video2.play();
-        }, {once: true});
-
-        // --- SOLUCIÓN FLASH ---
-        flashBtn.addEventListener('click', async () => {
-            const videoEl = document.querySelector('video'); // El video de la cámara
-            const stream = videoEl.srcObject;
-            const track = stream.getVideoTracks()[0];
-            isFlashOn = !isFlashOn;
-            await track.applyConstraints({ advanced: [{ torch: isFlashOn }] });
-            flashBtn.classList.toggle('active', isFlashOn);
-        });
-
-        // --- SOLUCIÓN GRABACIÓN ---
-        btn.addEventListener('click', () => {
-            const canvas = document.querySelector('canvas');
-            const stream = canvas.captureStream(30);
-            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            let chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, {type: 'video/webm'});
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'record.webm'; a.click();
-            };
-            if(btn.classList.toggle('recording')) { recorder.start(); } else { recorder.stop(); }
-        });
+        // Esta función aísla el problema del Flash
+        async function testFlash() {
+            try {
+                // Buscamos el stream de la cámara de MindAR
+                const scene = document.querySelector('a-scene');
+                const videoEl = scene.querySelector('video'); // El video nativo que crea MindAR
+                const stream = videoEl.srcObject;
+                const track = stream.getVideoTracks()[0];
+                
+                // Intentamos encender el flash
+                await track.applyConstraints({ advanced: [{ torch: true }] });
+                alert("Flash encendido con éxito");
+            } catch (e) {
+                alert("Error: " + e.message + ". ¿Estás en HTTPS?");
+            }
+        }
     </script>
 </body>
 </html>
