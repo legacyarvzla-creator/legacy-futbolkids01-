@@ -19,7 +19,16 @@
         <button id="torchButton" class="btn-circular">FLASH</button>
     </div>
 
-    <video id="miVideo" src="./video.mp4" loop="true" playsinline webkit-playsinline crossorigin="anonymous"></video>
+  <video id="miVideo" 
+       src="./video.mp4" 
+       preload="auto" 
+       crossorigin="anonymous" 
+       webkit-playsinline="true" 
+       playsinline="true" 
+       muted="true" 
+       autoplay="false"
+       loop="true">
+</video>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; alpha: true;">
