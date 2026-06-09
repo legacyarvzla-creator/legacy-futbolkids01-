@@ -2,78 +2,105 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>legacyfutbolkids01</title>
+    <title>Legacy-Futbokids01</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: black; }
-        #ui { position: absolute; z-index: 9999; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 25px; }
-        .btn-circular { width: 60px; height: 60px; border-radius: 50%; border: 2px solid white; background: rgba(0, 0, 0, 0.6); color: white; display: flex; align-items: center; justify-content: center; }
-        .grabando { background: #f44336; border-color: #f44336; }
+        body { margin: 0; overflow: hidden; background-color: black; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        #ui { position: absolute; z-index: 9999; bottom: 40px; left: 50%; transform: translateX(-50%); width: auto; display: flex; gap: 25px; justify-content: center; align-items: center; padding: 12px 25px; background: rgba(0, 0, 0, 0.6); border-radius: 50px; backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .btn-circular { width: 60px; height: 60px; border-radius: 50%; border: 2px solid white; background: rgba(0, 0, 0, 0.4); color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        .btn-circular:active { transform: scale(0.9); }
+        .btn-circular.grabando { background: rgba(244, 67, 54, 0.9); border-color: #f44336; }
+        #miVideo { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .a-enter-vr { display: none !important; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <button id="recordButton" class="btn-circular">REC</button>
-        <button id="torchButton" class="btn-circular">Luz</button>
+        <button id="recordButton" class="btn-circular" title="Grabar">🔴</button>
+        <button id="torchButton" class="btn-circular" title="Linterna">💡</button>
     </div>
 
-    <video id="miVideo" src="./video.mp4" loop playsinline crossorigin="anonymous" style="display:none"></video>
+    <video id="miVideo" src="video.mp4" preload="auto" crossorigin="anonymous" webkit-playsinline playsinline loop></video>
 
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true;" 
-             renderer="colorManagement: true, physicallyCorrectLights: true"
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiScanning: no; uiLoading: no;" 
+             renderer="colorManagement: true, physicallyCorrectLights, preserveDrawingBuffer: true, alpha: true" 
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
         
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
         <a-entity id="franelaTarget" mindar-image-target="targetIndex: 0">
-            <a-video src="#miVideo" width="1" height="1.77" position="0 0 0" rotation="0 0 0"></a-video>
+            <a-video id="arVideoEntity" src="#miVideo" width="1" height="1.777" position="0 0 0" rotation="0 0 0" scale="1.15 1.15 1" material="shader: flat; src: #miVideo;"></a-video>
         </a-entity>
     </a-scene>
 
     <script>
         const video = document.querySelector('#miVideo');
-        const franelaTarget = document.querySelector('#franelaTarget');
         const recordButton = document.querySelector('#recordButton');
+        const torchButton = document.querySelector('#torchButton');
 
-        // Autoplay forzado con click
-        document.addEventListener('click', () => { video.play(); }, { once: true });
+        // Activación de contexto de audio
+        const autorizarAudio = () => { video.play().then(() => video.pause()); document.removeEventListener('click', autorizarAudio); };
+        document.addEventListener('click', autorizarAudio);
 
-        franelaTarget.addEventListener("targetFound", () => { video.play(); });
-        franelaTarget.addEventListener("targetLost", () => { video.pause(); });
+        document.querySelector('#franelaTarget').addEventListener("targetFound", () => video.play());
+        document.querySelector('#franelaTarget').addEventListener("targetLost", () => video.pause());
 
-        // Grabación simplificada (Captura de pantalla nativa)
+        let mediaRecorder, videoBlobs, estaGrabando = false, loopMezclador, canvasFantasma;
+
         recordButton.addEventListener('click', async () => {
-            try {
-                // Pedimos capturar la pantalla completa (lo que ve el usuario)
-                const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true});
-                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
-                let chunks = [];
+            if (!estaGrabando) {
+                const canvasAR = document.querySelector('canvas');
+                const videoCam = document.querySelector('video:not(#miVideo)');
+                canvasFantasma = document.createElement('canvas');
+                canvasFantasma.width = canvasAR.clientWidth * window.devicePixelRatio;
+                canvasFantasma.height = canvasAR.clientHeight * window.devicePixelRatio;
+                const ctx = canvasFantasma.getContext('2d');
 
-                recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
+                const procesar = () => {
+                    if (!estaGrabando) return;
+                    ctx.drawImage(videoCam, 0, 0, canvasFantasma.width, canvasFantasma.height);
+                    ctx.drawImage(canvasAR, 0, 0, canvasFantasma.width, canvasFantasma.height);
+                    loopMezclador = requestAnimationFrame(procesar);
+                };
+                
+                estaGrabando = true;
+                procesar();
+
+                const stream = canvasFantasma.captureStream(30);
+                const audioStream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
+                if (audioStream) stream.addTrack(audioStream.getAudioTracks()[0]);
+
+                const codecs = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/mp4'];
+                const codecIdeal = codecs.find(c => MediaRecorder.isTypeSupported(c)) || 'video/webm';
+                
+                mediaRecorder = new MediaRecorder(stream, { mimeType: codecIdeal, videoBitsPerSecond: 5000000 });
+                videoBlobs = [];
+                mediaRecorder.ondataavailable = e => videoBlobs.push(e.data);
+                mediaRecorder.onstop = () => {
                     const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = 'experiencia_AR.webm';
+                    a.href = URL.createObjectURL(new Blob(videoBlobs, { type: videoBlobs[0].type }));
+                    a.download = 'Experiencia_FutbolKids.webm';
                     a.click();
                 };
-
-                recorder.start();
-                recordButton.classList.add('grabando');
-                recordButton.innerText = "STOP";
                 
-                stream.getVideoTracks()[0].onended = () => recorder.stop();
-            } catch (err) {
-                alert("Error al grabar: " + err.message);
+                mediaRecorder.start();
+                recordButton.innerText = "⏹️";
+                recordButton.classList.add('grabando');
+            } else {
+                estaGrabando = false;
+                mediaRecorder.stop();
+                recordButton.innerText = "🔴";
+                recordButton.classList.remove('grabando');
             }
         });
 
-        // Linterna
-        document.querySelector('#torchButton').addEventListener('click', () => {
-            const track = document.querySelector('video').srcObject?.getVideoTracks()[0];
-            if (track) track.applyConstraints({ advanced: [{ torch: true }] });
+        torchButton.addEventListener('click', async () => {
+            const track = document.querySelector('a-scene').systems["mindar-image-system"].video.srcObject.getVideoTracks()[0];
+            if (track?.getCapabilities().torch) {
+                const encendida = !track.getConstraints().advanced?.[0]?.torch;
+                await track.applyConstraints({ advanced: [{ torch: encendida }] });
+            }
         });
     </script>
 </body>
